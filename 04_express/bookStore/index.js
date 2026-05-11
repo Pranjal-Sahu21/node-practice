@@ -1,5 +1,6 @@
 const express = require("express");
 const app = express();
+const fs = require("fs");
 const PORT = 8000;
 
 // In-memory data store for books
@@ -37,6 +38,16 @@ const books = [
 ];
 
 app.use(express.json());
+
+// Middleware to log requests to a file
+app.use((req, res, next) => {
+  fs.appendFileSync(
+    "log.txt",
+    `[${new Date().toISOString()}]: ${req.method} ${req.url}\n`,
+    "utf-8",
+  );
+  next();
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
@@ -91,7 +102,8 @@ app.delete("/books/:id", (req, res) => {
   if (isNaN(bookId)) return res.status(400).json({ error: "Invalid book ID" });
 
   const bookIndex = books.findIndex((b) => b.id === bookId);
-  if (bookIndex === -1) return res.status(404).json({ error: "Book not found" });
+  if (bookIndex === -1)
+    return res.status(404).json({ error: "Book not found" });
 
   books.splice(bookIndex, 1);
   res.status(200).json({ message: "Book deleted successfully" });

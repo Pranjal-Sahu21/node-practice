@@ -4,3 +4,4 @@
 03_servers/httpServerTask/log.txt
 04_express/node_modules
 04_express/bookStore/node_modules
+04_express/bookStore/log.txt
