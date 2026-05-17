@@ -1,50 +1,56 @@
-const { books } = require("../data/books");
+const { booksTable } = require("../models/index");
+const { db } = require("../db");
+const { eq } = require("drizzle-orm");
 
 // Get all books
-exports.getAllBooks = (req, res) => {
-  res.json(books);
+exports.getAllBooks = async (req, res) => {
+  const books = await db.select().from(booksTable);
+  return res.json(books).status(200);
 };
 
 // Get book by ID
-exports.getBookById = (req, res) => {
-  const bookId = parseInt(req.params.id);
-  if (isNaN(bookId)) return res.status(400).json({ error: "Invalid book ID" });
+exports.getBookById = async (req, res) => {
+  const bookId = req.params.id;
+  if (!bookId) return res.status(400).json({ error: "Invalid book ID" });
 
-  const book = books.find(b => b.id === bookId);
+  const [book] = await db
+    .select()
+    .from(booksTable)
+    .where((table) => eq(table.id, bookId))
+    .limit(1);
   if (!book) return res.status(404).json({ error: "Book not found" });
 
-  res.json(book);
-};
-
-// Get books by author
-exports.getBooksByAuthor = (req, res) => {
-  const authorName = req.params.authorName.toLowerCase();
-  const filteredBooks = books.filter(b => b.author.toLowerCase() === authorName);   
-    if (filteredBooks.length === 0) return res.status(404).json({ error: "No books found for this author" });
-    res.json(filteredBooks);
+  res.json(book).status(200);
 };
 
 // Add a new book
-exports.addBook = (req, res) => {       
-    const { title, author, year } = req.body;
-    if (!title.trim() || !author.trim() || !year) return res.status(400).json({ error: "Missing required fields" });
-    const newBook = {
-        id: books.length + 1,
-        title,
-        author,
-        year
-    };
-    books.push(newBook);
-    res.status(201).json({ message: "Book added successfully", book: newBook });
+exports.addBook = async (req, res) => {
+  const { title, description, authorId } = req.body;
+  if (!title || !description || !authorId) {
+    return res
+      .status(400)
+      .json({ error: "Title, description, and authorId are required" });
+  }
+  const [newBook] = await db
+    .insert(booksTable)
+    .values({ title, description, authorId })
+    .returning({ id: booksTable.id });
+  res.json({ message: "Book added successfully", id: newBook.id }).status(201);
 };
 
 // Delete a book by ID
-exports.deleteBookById = (req, res) => {
-    const bookId = parseInt(req.params.id);
-    if (isNaN(bookId)) return res.status(400).json({ error: "Invalid book ID" });
-    const bookIndex = books.findIndex(b => b.id === bookId);
-    if (bookIndex === -1) return res.status(404).json({ error: "Book not found" });
-    books.splice(bookIndex, 1);
-    res.json({ message: "Book deleted successfully" });
-};
+exports.deleteBookById = async (req, res) => {
+  const bookId = req.params.id;
+  if (!bookId) return res.status(400).json({ error: "Invalid book ID" });
+  
+  const [book] = await db
+    .select()
+    .from(booksTable)
+    .where((table) => eq(table.id, bookId))
+    .limit(1);
+  if (!book) return res.status(404).json({ error: "Book not found" });
+  
+  await db.delete(booksTable).where((table) => eq(table.id, bookId));
 
+  res.json({ message: "Book deleted successfully" }).status(200);
+};
