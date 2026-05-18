@@ -7,3 +7,5 @@
 04_express/bookStore/log.txt
 04_express/bookStore/.env
 05_auth/node_modules
+05_auth/statefulAuth/node_modules
+05_auth/statefulAuth/.env
