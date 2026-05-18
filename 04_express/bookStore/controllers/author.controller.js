@@ -1,4 +1,5 @@
 const { authorsTable } = require("../models/index");
+const { booksTable } = require("../models/index");
 const { db } = require("../db");
 const { eq } = require("drizzle-orm");
 
@@ -37,6 +38,19 @@ exports.addAuthor = async (req, res) => {
     .returning({ id: authorsTable.id });
   res.json({ message: "Author added successfully", id: newAuthor.id }).status(201);
 };
+
+// Get all books by an author
+exports.getBooksByAuthorId = async (req, res) => {
+  const authorId = req.params.id;
+  if (!authorId) return res.status(400).json({ error: "Invalid author ID" });
+
+  const books = await db
+    .select()
+    .from(booksTable)
+    .where((table) => eq(table.authorId, authorId));
+
+  res.json(books).status(200);
+};  
 
 // Delete an author by ID
 exports.deleteAuthorById = async (req, res) => {
