@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+
 export const authMiddleware = async (req, res, next) => {
   const tokenHeader = req.headers["authorization"];
   if (!tokenHeader) return next();
@@ -21,4 +22,24 @@ export const authMiddleware = async (req, res, next) => {
   }
 
   next();
+};
+
+export const ensureAuthenticated = async (req, res, next) => {
+  if (!req.user) {
+    return res
+      .status(401)
+      .json({ error: "You must be authenticated to access this!" });
+  }
+  next();
+};
+
+export const restrictToRole = (role) => {
+  return (req, res, next) => {
+    if (req.user.role !== role)
+      return res
+        .status(401)
+        .json({ error: "You are not authorized to access this resource!" });
+
+    return next();
+  };
 };

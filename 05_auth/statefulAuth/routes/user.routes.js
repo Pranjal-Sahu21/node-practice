@@ -4,40 +4,37 @@ import "dotenv/config";
 import { userSessions, usersTable } from "../db/schema.js";
 import { randomBytes, createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { table } from "node:console";
 import jwt from "jsonwebtoken";
+import { ensureAuthenticated } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
 // Update user details if session is valid, else return unauthorized
-router.patch("/", async (req, res) => {
-  const user = req.user;
-  if (!user) {
-    return res.status(401).json({ error: "Unauthorized!" });
-  }
+router.patch("/", ensureAuthenticated, async (req, res) => {
   const { name, email } = req.body ?? {};
+  const updateData = {};
 
-  if (!name && !email) {
+  if (name) updateData.name = name;
+  if (email) updateData.email = email;
+
+  if (Object.keys(updateData).length === 0) {
     return res
       .status(400)
       .json({ error: "At least one of name or email is required to update!" });
   }
 
-  await db.update(usersTable)
-    .set({ name, email })
-    .where(eq(usersTable.id, user.id));
+  await db
+    .update(usersTable)
+    .set(updateData)
+    .where(eq(usersTable.id, req.user.id));
   res.status(200).json({ message: "User details updated successfully!" });
 });
 
 // Returns current logged in user details
-router.get("/", async (req, res) => {
-  const user = req.user;
-  if (!user) {
-    return res.status(401).json({ error: "Unauthorized!" });
-  }
+router.get("/", ensureAuthenticated, async (req, res) => {
   res
     .status(200)
-    .json({ message: "User details fetched successfully!", data: user });
+    .json({ message: "User details fetched successfully!", data: req.user });
 });
 
 // Signup a new user
@@ -98,6 +95,7 @@ router.post("/login", async (req, res) => {
       id: usersTable.id,
       email: usersTable.email,
       name: usersTable.name,
+      role: usersTable.role,
       salt: usersTable.salt,
       password: usersTable.password,
     })
@@ -123,7 +121,8 @@ router.post("/login", async (req, res) => {
       id: existingUser.id,
       email: existingUser.email,
       name: existingUser.name,
-    }
+      role: existingUser.role
+    };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET);
     res.status(200).json({
