@@ -1,9 +1,11 @@
 import express from "express";
 import db from "../db/index.js";
+import "dotenv/config";
 import { userSessions, usersTable } from "../db/schema.js";
 import { randomBytes, createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { table } from "node:console";
+import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
@@ -95,6 +97,7 @@ router.post("/login", async (req, res) => {
     .select({
       id: usersTable.id,
       email: usersTable.email,
+      name: usersTable.name,
       salt: usersTable.salt,
       password: usersTable.password,
     })
@@ -116,13 +119,16 @@ router.post("/login", async (req, res) => {
     .digest("hex");
 
   if (newHashedPassword === existingHashedPassword) {
-    const session = await db
-      .insert(userSessions)
-      .values({ userId: existingUser.id })
-      .returning({ id: userSessions.id });
+    const payload = {
+      id: existingUser.id,
+      email: existingUser.email,
+      name: existingUser.name,
+    }
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET);
     res.status(200).json({
       message: "Login successful!",
-      data: { sessionId: session[0].id },
+      data: { token },
     });
   } else {
     res.status(401).json({ error: "Incorrect password!" });
