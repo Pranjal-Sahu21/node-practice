@@ -54,6 +54,38 @@ router.post("/signup", async (req, res) => {
 });
 
 // Login an existing user
-router.post("/login", async (req, res) => {});
+router.post("/login", async (req, res) => {
+    const { email, password } = req.body ?? {};
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required!" });
+    }
+
+    // Check if user with the same email already exists
+  const [ existingUser ] = await db
+    .select({
+        email: usersTable.email,
+        salt: usersTable.salt,
+        password: usersTable.password
+    })
+    .from(usersTable)
+    .where((table) => eq(table.email, email))
+    .limit(1);
+
+    if(!existingUser) {
+        return res.status(404).json({ error: "User with this email doesn't exist!" });
+    }
+
+    const salt = existingUser.salt;
+    const existingHashedPassword = existingUser.password;
+    const newHashedPassword = createHmac("sha256", salt).update(password).digest("hex");
+
+    if(newHashedPassword === existingHashedPassword) {
+        res.status(200).json({ message: "Login successful!" });
+    } else {
+        res.status(401).json({ error: "Incorrect password!" });
+    }
+
+});
 
 export default router;
