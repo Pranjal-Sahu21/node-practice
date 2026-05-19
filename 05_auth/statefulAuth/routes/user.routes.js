@@ -1,13 +1,42 @@
 import express from "express";
 import db from "../db/index.js";
-import { usersTable } from "../db/schema.js";
+import { userSessions, usersTable } from "../db/schema.js";
 import { randomBytes, createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { table } from "node:console";
 
 const router = express.Router();
 
+// Update user details if session is valid, else return unauthorized
+router.patch("/", async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized!" });
+  }
+  const { name, email } = req.body ?? {};
+
+  if (!name && !email) {
+    return res
+      .status(400)
+      .json({ error: "At least one of name or email is required to update!" });
+  }
+
+  await db.update(usersTable)
+    .set({ name, email })
+    .where(eq(usersTable.id, user.id));
+  res.status(200).json({ message: "User details updated successfully!" });
+});
+
 // Returns current logged in user details
-router.get("/", (req, res) => {});
+router.get("/", async (req, res) => {
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized!" });
+  }
+  res
+    .status(200)
+    .json({ message: "User details fetched successfully!", data: user });
+});
 
 // Signup a new user
 router.post("/signup", async (req, res) => {
@@ -55,37 +84,49 @@ router.post("/signup", async (req, res) => {
 
 // Login an existing user
 router.post("/login", async (req, res) => {
-    const { email, password } = req.body ?? {};
+  const { email, password } = req.body ?? {};
 
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required!" });
-    }
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required!" });
+  }
 
-    // Check if user with the same email already exists
-  const [ existingUser ] = await db
+  // Check if user with the same email already exists
+  const [existingUser] = await db
     .select({
-        email: usersTable.email,
-        salt: usersTable.salt,
-        password: usersTable.password
+      id: usersTable.id,
+      email: usersTable.email,
+      salt: usersTable.salt,
+      password: usersTable.password,
     })
     .from(usersTable)
     .where((table) => eq(table.email, email))
     .limit(1);
 
-    if(!existingUser) {
-        return res.status(404).json({ error: "User with this email doesn't exist!" });
-    }
+  if (!existingUser) {
+    return res
+      .status(404)
+      .json({ error: "User with this email doesn't exist!" });
+  }
 
-    const salt = existingUser.salt;
-    const existingHashedPassword = existingUser.password;
-    const newHashedPassword = createHmac("sha256", salt).update(password).digest("hex");
+  // Hash the provided password with the stored salt and compare with the stored hashed password
+  const salt = existingUser.salt;
+  const existingHashedPassword = existingUser.password;
+  const newHashedPassword = createHmac("sha256", salt)
+    .update(password)
+    .digest("hex");
 
-    if(newHashedPassword === existingHashedPassword) {
-        res.status(200).json({ message: "Login successful!" });
-    } else {
-        res.status(401).json({ error: "Incorrect password!" });
-    }
-
+  if (newHashedPassword === existingHashedPassword) {
+    const session = await db
+      .insert(userSessions)
+      .values({ userId: existingUser.id })
+      .returning({ id: userSessions.id });
+    res.status(200).json({
+      message: "Login successful!",
+      data: { sessionId: session[0].id },
+    });
+  } else {
+    res.status(401).json({ error: "Incorrect password!" });
+  }
 });
 
 export default router;
